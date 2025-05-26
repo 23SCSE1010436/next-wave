@@ -1,0 +1,69 @@
+import yfinance as yf
+import pandas as pd
+import matplotlib.pyplot as plt
+import calendar
+import sys
+
+def fetch_sensex_data():
+    """
+    Fetch historical Sensex data using yfinance.
+    Returns a DataFrame or None if download fails.
+    """
+    ticker = "^BSESN"  # Sensex ticker symbol on Yahoo Finance
+    try:
+        print("Downloading Sensex data...")
+        data = yf.download(ticker, start="2010-01-01", end="2025-12-31")
+        if data.empty:
+            print("Warning: Downloaded data is empty.")
+            return None
+        return data
+    except Exception as e:
+        print(f"Error downloading data: {e}")
+        return None
+
+def analyze_best_month(data):
+    """
+    Analyze the data to find the best month (season) for business growth.
+    Input:
+        data - DataFrame with historical prices and DateTimeIndex
+    Returns:
+        best_month (int), monthly_avg (pandas Series)
+    """
+    data = data.copy()
+    data['Month'] = data.index.month
+    data['Monthly Return'] = data['Close'].pct_change()
+    monthly_avg = data.groupby('Month')['Monthly Return'].mean()
+    best_month = monthly_avg.idxmax()
+    return best_month, monthly_avg
+
+def plot_monthly_returns(monthly_avg):
+    """
+    Plot average monthly returns using matplotlib.
+    """
+    plt.figure(figsize=(10, 6))
+    month_names = [calendar.month_abbr[i] for i in range(1, 13)]
+    colors = ['#90caf9' if r >= 0 else '#ef9a9a' for r in monthly_avg]  # Blue for positive, red for negative
+    monthly_avg.plot(kind='bar', color=colors)
+    plt.title("Average Monthly Returns for Sensex (2010-2025)")
+    plt.xlabel("Month")
+    plt.ylabel("Average Monthly Return")
+    plt.xticks(ticks=range(12), labels=month_names, rotation=45)
+    plt.axhline(0, color='black', linewidth=0.8, linestyle='--')
+    plt.tight_layout()
+    plt.show()
+
+def main():
+    data = fetch_sensex_data()
+    if data is None:
+        print("Failed to retrieve Sensex data. Please check your internet connection or")
+        print("consider providing a local CSV file and modify the script accordingly.")
+        sys.exit(1)
+    best_month, monthly_avg = analyze_best_month(data)
+    plot_monthly_returns(monthly_avg)
+    best_month_name = calendar.month_name[best_month]
+    best_month_return = monthly_avg.max()
+    print(f"The best month for business growth based on Sensex historical returns is: {best_month_name}")
+    print(f"Average monthly return for {best_month_name}: {best_month_return:.2%}")
+
+if _name_ == "_main_":
+    main()
