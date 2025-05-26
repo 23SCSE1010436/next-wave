@@ -1,0 +1,100 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import argparse
+from sklearn.tree import DecisionTreeRegressor
+import numpy as np
+import sys
+
+SEASON_ORDER = ['Spring', 'Summer', 'Autumn', 'Winter']
+
+def encode_season(season_series):
+    """Encode season names to numeric values for modeling."""
+    return season_series.apply(lambda x: SEASON_ORDER.index(x) if x in SEASON_ORDER else -1)
+
+def load_data(filename):
+    """Load CSV data from filename, validate it contains required columns."""
+    try:
+        df = pd.read_csv(filename, parse_dates=['Date'])
+    except FileNotFoundError:
+        print(f"Error: File '{filename}' not found. Please place it in the current directory.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error loading data file: {e}")
+        sys.exit(1)
+
+    required_cols = {'Date', 'Product', 'Sales', 'Season'}
+    if not required_cols.issubset(set(df.columns)):
+        print(f"Error: Input file must contain columns: {required_cols}")
+        sys.exit(1)
+    return df
+
+def visualize_season_sales(df, product):
+    """Visualize average sales by season for the given product."""
+    seasonal_avg = df.groupby('Season')['Sales'].mean().reindex(SEASON_ORDER)
+    
+    colors = ['#ff9999','#66b3ff','#99ff99','#ffcc99']
+    ax = seasonal_avg.plot(kind='bar', color=colors, figsize=(8,5))
+    ax.set_title(f'Average Sales by Season for Product: {product}', fontsize=14)
+    ax.set_xlabel('Season', fontsize=12)
+    ax.set_ylabel('Average Sales', fontsize=12)
+    ax.grid(axis='y', linestyle='--', alpha=0.7)
+    plt.xticks(rotation=0)
+    plt.tight_layout()
+    plt.show()
+    return seasonal_avg
+
+def train_predictor(df_product):
+    """Train a decision tree regressor to predict sales based on season numeric code."""
+    df = df_product.copy()
+    df['SeasonCode'] = encode_season(df['Season'])
+    
+    # Filter out invalid season codes
+    df = df[df['SeasonCode'] >= 0]
+    if df.empty:
+        print("No valid season encoding found. Cannot train model.")
+        sys.exit(1)
+
+    X = df[['SeasonCode']]
+    y = df['Sales']
+    
+    model = DecisionTreeRegressor(random_state=42)
+    model.fit(X, y)
+    return model
+
+def predict_best_season(model):
+    """Predict average sales per season and return the best season name."""
+    season_codes = np.array(range(len(SEASON_ORDER))).reshape(-1,1)
+    preds = model.predict(season_codes)
+    best_index = np.argmax(preds)
+    best_season = SEASON_ORDER[best_index]
+    best_value = preds[best_index]
+    return best_season, best_value, preds
+
+def main():
+    parser = argparse.ArgumentParser(description="Business Season Analysis & Prediction")
+    parser.add_argument('--product', type=str, required=True, help="Product name to analyze")
+    parser.add_argument('--file', type=str, default='product_season_sales.csv', help="CSV data file path")
+    args = parser.parse_args()
+
+    df = load_data(args.file)
+    df_product = df[df['Product'] == args.product]
+    if df_product.empty:
+        print(f"No data found for product '{args.product}'. Please check product name and data file.")
+        sys.exit(1)
+
+    print(f"Loaded {len(df_product)} records for product '{args.product}'.")
+
+    seasonal_avg = visualize_season_sales(df_product, args.product)
+
+    model = train_predictor(df_product)
+
+    best_season, best_value, preds = predict_best_season(model)
+
+    print("\nPredicted average sales by season:")
+    for season, pred in zip(SEASON_ORDER, preds):
+        print(f"  {season}: {pred:.2f}")
+
+    print(f"\nBest season predicted for business growth: {best_season} (Predicted Average Sales: {best_value:.2f})")
+
+if _name_ == "_main_":
+    main()
